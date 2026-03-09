@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Notes Management</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: Arial, sans-serif; background: #f5f5f5; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+    .header { background: #2c3e50; color: white; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; }
+    .btn { padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-size: 14px; }
+    .btn-primary { background: #3498db; color: white; }
+    .btn-danger { background: #e74c3c; color: white; }
+    .btn-success { background: #27ae60; color: white; }
+    .card { background: white; padding: 20px; margin: 20px 0; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    input, select, textarea { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 4px; }
+    .search-bar { margin: 20px 0; }
+    .note-item { background: #fff; padding: 15px; margin: 10px 0; border-left: 4px solid #3498db; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    .note-item h3 { color: #2c3e50; margin-bottom: 8px; }
+    .note-meta { color: #7f8c8d; font-size: 12px; margin: 5px 0; }
+    .hidden { display: none; }
+    .form-group { margin: 15px 0; }
+    label { display: block; margin-bottom: 5px; font-weight: bold; color: #2c3e50; }
+    @media (max-width: 768px) {
+      .container { padding: 10px; }
+      .header { flex-direction: column; gap: 10px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>📚 Notes Management</h1>
+    <div id="userInfo"></div>
+  </div>
+
+  <div class="container">
+    <!-- Login -->
+    <div id="loginView" class="card">
+      <h2>Login</h2>
+      <input type="email" id="loginEmail" placeholder="Email">
+      <input type="password" id="loginPassword" placeholder="Password (admin only)">
+      <button class="btn btn-primary" onclick="login()">Login</button>
+    </div>
+
+    <!-- Student/Uploader View -->
+    <div id="studentView" class="hidden">
+      <div class="search-bar">
+        <input type="text" id="searchInput" placeholder="🔍 Search notes..." onkeyup="searchNotes()">
+      </div>
+      <div id="notesList"></div>
+    </div>
+
+    <!-- Upload Form (Uploader + Admin) -->
+    <div id="uploadView" class="card hidden">
+      <h2>Upload Notes</h2>
+      <form id="uploadForm" onsubmit="uploadNote(event)">
+        <div class="form-group" id="branchSelectGroup" class="hidden">
+          <label>Branch</label>
+          <select id="uploadBranch">
+            <option value="CSE">CSE</option>
+            <option value="ECE">ECE</option>
+            <option value="EEE">EEE</option>
+            <option value="AIML">AIML</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Semester *</label>
+          <select id="uploadSemester" required>
+            <option value="1">Semester 1</option>
+            <option value="2">Semester 2</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Subject *</label>
+          <select id="uploadSubject" required>
+            <option value="Math">Math</option>
+            <option value="Physics">Physics</option>
+            <option value="Chemistry">Chemistry</option>
+            <option value="IT">IT</option>
+            <option value="DS">DS</option>
+            <option value="Python">Python</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Unit *</label>
+          <select id="uploadUnit" required>
+            <option value="1">Unit 1</option>
+            <option value="2">Unit 2</option>
+            <option value="3">Unit 3</option>
+            <option value="4">Unit 4</option>
+            <option value="5">Unit 5</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Tags</label>
+          <input type="text" id="uploadTags" placeholder="e.g., important, exam">
+        </div>
+        <div class="form-group">
+          <label>Description</label>
+          <textarea id="uploadDescription" rows="3"></textarea>
+        </div>
+        <div class="form-group">
+          <label>File *</label>
+          <input type="file" id="uploadFile" required>
+        </div>
+        <button type="submit" class="btn btn-success">Upload</button>
+      </form>
+    </div>
+
+    <!-- Admin View -->
+    <div id="adminView" class="card hidden">
+      <h2>Manage Uploaders</h2>
+      <input type="email" id="uploaderEmail" placeholder="Student email">
+      <button class="btn btn-primary" onclick="addUploader()">Add Uploader</button>
+      <div id="uploadersList"></div>
+    </div>
+  </div>
+
+  <script>
+    let currentUser = null;
+
+    async function login() {
+      const email = document.getElementById('loginEmail').value;
+      const password = document.getElementById('loginPassword').value;
+      const res = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      const data = await res.json();
+      if (data.success) {
+        currentUser = data.user;
+        showDashboard();
+      } else {
+        alert(data.error);
+      }
+    }
+
+    async function logout() {
+      await fetch('/api/logout', { method: 'POST' });
+      location.reload();
+    }
+
+    function showDashboard() {
+      document.getElementById('loginView').classList.add('hidden');
+      document.getElementById('studentView').classList.remove('hidden');
+      document.getElementById('userInfo').innerHTML = `
+        <span>${currentUser.email} (${currentUser.role}${currentUser.branch ? ' - ' + currentUser.branch : ''})</span>
+        <button class="btn btn-danger" onclick="logout()">Logout</button>
+      `;
+
+      if (currentUser.role === 'admin') {
+        document.getElementById('uploadView').classList.remove('hidden');
+        document.getElementById('adminView').classList.remove('hidden');
+        document.getElementById('branchSelectGroup').classList.remove('hidden');
+        loadUploaders();
+      } else if (currentUser.role === 'uploader') {
+        document.getElementById('uploadView').classList.remove('hidden');
+      }
+
+      loadNotes();
+    }
+
+    async function loadNotes(search = '') {
+      const res = await fetch(`/api/notes?search=${search}`);
+      const notes = await res.json();
+      const list = document.getElementById('notesList');
+      list.innerHTML = notes.map(n => `
+        <div class="note-item">
+          <h3>${n.subject} - Unit ${n.unit}</h3>
+          <div class="note-meta">
+            📁 ${n.branch} | 📅 Semester ${n.semester} | 👤 ${n.uploadedBy}
+          </div>
+          ${n.tags ? `<div class="note-meta">🏷️ ${n.tags}</div>` : ''}
+          ${n.description ? `<p>${n.description}</p>` : ''}
+          <div style="margin-top: 10px;">
+            <a href="${n.path}" download class="btn btn-primary">Download</a>
+            ${currentUser.role === 'admin' ? `<button class="btn btn-danger" onclick="deleteNote(${n.id})">Delete</button>` : ''}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function searchNotes() {
+      const search = document.getElementById('searchInput').value;
+      loadNotes(search);
+    }
+
+    async function uploadNote(e) {
+      e.preventDefault();
+      const formData = new FormData();
+      formData.append('file', document.getElementById('uploadFile').files[0]);
+      formData.append('semester', document.getElementById('uploadSemester').value);
+      formData.append('subject', document.getElementById('uploadSubject').value);
+      formData.append('unit', document.getElementById('uploadUnit').value);
+      formData.append('tags', document.getElementById('uploadTags').value);
+      formData.append('description', document.getElementById('uploadDescription').value);
+      if (currentUser.role === 'admin') {
+        formData.append('branch', document.getElementById('uploadBranch').value);
+      }
+
+      const res = await fetch('/api/upload', { method: 'POST', body: formData });
+      const data = await res.json();
+      if (data.success) {
+        alert('Note uploaded successfully!');
+        document.getElementById('uploadForm').reset();
+        loadNotes();
+      }
+    }
+
+    async function deleteNote(id) {
+      if (!confirm('Delete this note?')) return;
+      await fetch(`/api/notes/${id}`, { method: 'DELETE' });
+      loadNotes();
+    }
+
+    async function addUploader() {
+      const email = document.getElementById('uploaderEmail').value;
+      const res = await fetch('/api/uploaders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert('Uploader added!');
+        loadUploaders();
+      }
+    }
+
+    async function loadUploaders() {
+      const res = await fetch('/api/uploaders');
+      const uploaders = await res.json();
+      document.getElementById('uploadersList').innerHTML = `
+        <h3>Current Uploaders:</h3>
+        ${uploaders.map(u => `<div class="note-meta">✓ ${u}</div>`).join('')}
+      `;
+    }
+
+    // Check if already logged in
+    fetch('/api/user').then(r => r.json()).then(user => {
+      if (user.email) {
+        currentUser = user;
+        showDashboard();
+      }
+    }).catch(() => {});
+  </script>
+</body>
+</html>
