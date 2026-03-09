@@ -1,12 +1,31 @@
 import express from 'express';
 import session from 'express-session';
 import multer from 'multer';
+import passport from 'passport';
+import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import fs from 'fs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
+
+// Google OAuth Config
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || 'YOUR_GOOGLE_CLIENT_ID';
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || 'YOUR_GOOGLE_CLIENT_SECRET';
+const CALLBACK_URL = process.env.CALLBACK_URL || 'http://localhost:3000/auth/google/callback';
+
+passport.use(new GoogleStrategy({
+  clientID: GOOGLE_CLIENT_ID,
+  clientSecret: GOOGLE_CLIENT_SECRET,
+  callbackURL: CALLBACK_URL
+}, (accessToken, refreshToken, profile, done) => {
+  const email = profile.emails[0].value;
+  return done(null, { email, profile });
+}));
+
+passport.serializeUser((user, done) => done(null, user));
+passport.deserializeUser((user, done) => done(null, user));
 
 // Storage setup
 const uploadDir = join(__dirname, 'uploads');
@@ -23,6 +42,8 @@ const notes = [];
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(session({ secret: 'notes-secret', resave: false, saveUninitialized: false }));
+app.use(passport.initialize());
+app.use(passport.session());
 app.use('/uploads', express.static('uploads'));
 
 // Auth middleware
@@ -50,6 +71,19 @@ const getBranch = (email) => {
 };
 
 // Routes
+app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
+
+app.get('/auth/google/callback', 
+  passport.authenticate('google', { failureRedirect: '/' }),
+  (req, res) => {
+    const email = req.user.email;
+    const userInfo = parseEmail(email);
+    if (!userInfo) return res.redirect('/?error=invalid_email');
+    req.session.user = { email, ...userInfo };
+    res.redirect('/');
+  }
+);
+
 app.post('/api/login', (req, res) => {
   const { email, password } = req.body;
   const userInfo = parseEmail(email);
