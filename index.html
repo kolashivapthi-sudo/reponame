@@ -22,6 +22,17 @@
     .hidden { display: none; }
     .form-group { margin: 15px 0; }
     label { display: block; margin-bottom: 5px; font-weight: bold; color: #2c3e50; }
+    .favorite-btn { background: none; border: none; cursor: pointer; font-size: 24px; }
+    .favorite-btn.active { color: #e74c3c; }
+    .pdf-viewer { width: 100%; height: 80vh; border: 1px solid #ddd; margin-top: 10px; }
+    .highlight-tools { margin: 10px 0; padding: 10px; background: #f8f9fa; border-radius: 4px; }
+    .highlight-btn { padding: 5px 15px; margin: 0 5px; border: none; border-radius: 3px; cursor: pointer; }
+    .highlight-yellow { background: #ffeb3b; }
+    .highlight-green { background: #4caf50; color: white; }
+    .highlight-blue { background: #2196f3; color: white; }
+    .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); }
+    .modal-content { background: white; margin: 2% auto; padding: 20px; width: 90%; max-width: 1200px; height: 90vh; border-radius: 8px; position: relative; }
+    .close-modal { position: absolute; right: 20px; top: 10px; font-size: 30px; cursor: pointer; color: #666; }
     @media (max-width: 768px) {
       .container { padding: 10px; }
       .header { flex-direction: column; gap: 10px; }
@@ -48,8 +59,24 @@
     <div id="studentView" class="hidden">
       <div class="search-bar">
         <input type="text" id="searchInput" placeholder="🔍 Search notes..." onkeyup="searchNotes()">
+        <button class="btn btn-primary" onclick="showFavorites()" style="margin-left: 10px;">⭐ Favorites</button>
       </div>
       <div id="notesList"></div>
+    </div>
+
+    <!-- PDF Viewer Modal -->
+    <div id="pdfModal" class="modal">
+      <div class="modal-content">
+        <span class="close-modal" onclick="closePdfViewer()">&times;</span>
+        <h2 id="pdfTitle"></h2>
+        <div class="highlight-tools">
+          <button class="highlight-btn highlight-yellow" onclick="setHighlightColor('yellow')">Yellow</button>
+          <button class="highlight-btn highlight-green" onclick="setHighlightColor('green')">Green</button>
+          <button class="highlight-btn highlight-blue" onclick="setHighlightColor('blue')">Blue</button>
+          <button class="btn btn-danger" onclick="clearHighlights()">Clear All</button>
+        </div>
+        <iframe id="pdfFrame" class="pdf-viewer"></iframe>
+      </div>
     </div>
 
     <!-- Upload Form (Uploader + Admin) -->
@@ -120,6 +147,66 @@
 
   <script>
     let currentUser = null;
+    let favorites = [];
+    let currentNoteId = null;
+    let highlightColor = 'yellow';
+
+    async function loadFavorites() {
+      const res = await fetch('/api/favorites');
+      favorites = await res.json();
+    }
+
+    async function toggleFavorite(noteId) {
+      const isFav = favorites.includes(noteId);
+      const method = isFav ? 'DELETE' : 'POST';
+      const res = await fetch(`/api/favorites/${noteId}`, { method });
+      const data = await res.json();
+      favorites = data.favorites;
+      loadNotes();
+    }
+
+    async function showFavorites() {
+      const res = await fetch('/api/notes');
+      const allNotes = await res.json();
+      const favNotes = allNotes.filter(n => favorites.includes(n.id));
+      displayNotes(favNotes);
+    }
+
+    function openPdfViewer(note) {
+      currentNoteId = note.id;
+      document.getElementById('pdfTitle').textContent = `${note.subject} - Unit ${note.unit}`;
+      document.getElementById('pdfFrame').src = note.path;
+      document.getElementById('pdfModal').style.display = 'block';
+      loadHighlights(note.id);
+    }
+
+    function closePdfViewer() {
+      document.getElementById('pdfModal').style.display = 'none';
+      document.getElementById('pdfFrame').src = '';
+    }
+
+    function setHighlightColor(color) {
+      highlightColor = color;
+    }
+
+    async function saveHighlights(highlights) {
+      await fetch(`/api/highlights/${currentNoteId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ highlights })
+      });
+    }
+
+    async function loadHighlights(noteId) {
+      const res = await fetch(`/api/highlights/${noteId}`);
+      const highlights = await res.json();
+      // Apply highlights to PDF viewer
+    }
+
+    function clearHighlights() {
+      saveHighlights([]);
+      alert('Highlights cleared!');
+    }
 
     async function login() {
       const email = document.getElementById('loginEmail').value;
@@ -160,22 +247,36 @@
       }
 
       loadNotes();
+      loadFavorites();
     }
 
     async function loadNotes(search = '') {
       const res = await fetch(`/api/notes?search=${search}`);
       const notes = await res.json();
+      displayNotes(notes);
+    }
+
+    function displayNotes(notes) {
       const list = document.getElementById('notesList');
       list.innerHTML = notes.map(n => `
         <div class="note-item">
-          <h3>${n.subject} - Unit ${n.unit}</h3>
-          <div class="note-meta">
-            📁 ${n.branch} | 📅 Semester ${n.semester} | 👤 ${n.uploadedBy}
+          <div style="display: flex; justify-content: space-between; align-items: start;">
+            <div style="flex: 1;">
+              <h3>${n.subject} - Unit ${n.unit}</h3>
+              <div class="note-meta">
+                📁 ${n.branch} | 📅 Semester ${n.semester} | 👤 ${n.uploadedBy}
+              </div>
+              ${n.tags ? `<div class="note-meta">🏷️ ${n.tags}</div>` : ''}
+              ${n.description ? `<p>${n.description}</p>` : ''}
+            </div>
+            <button class="favorite-btn ${favorites.includes(n.id) ? 'active' : ''}" 
+                    onclick="toggleFavorite(${n.id})" title="Add to favorites">
+              ${favorites.includes(n.id) ? '❤️' : '🤍'}
+            </button>
           </div>
-          ${n.tags ? `<div class="note-meta">🏷️ ${n.tags}</div>` : ''}
-          ${n.description ? `<p>${n.description}</p>` : ''}
           <div style="margin-top: 10px;">
-            <a href="${n.path}" download class="btn btn-primary">Download</a>
+            <button class="btn btn-primary" onclick='openPdfViewer(${JSON.stringify(n)})'>📄 View</button>
+            <a href="${n.path}" download class="btn btn-primary">⬇️ Download</a>
             ${currentUser.role === 'admin' ? `<button class="btn btn-danger" onclick="deleteNote(${n.id})">Delete</button>` : ''}
           </div>
         </div>

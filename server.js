@@ -37,6 +37,7 @@ const users = {
   uploaders: []
 };
 const notes = [];
+const userPreferences = {}; // Store favorites and highlights per user
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -158,6 +159,48 @@ app.post('/api/uploaders', auth, (req, res) => {
 app.get('/api/uploaders', auth, (req, res) => {
   if (req.session.user.role !== 'admin') return res.status(403).json({ error: 'Permission denied' });
   res.json(users.uploaders);
+});
+
+// Favorites
+app.post('/api/favorites/:id', auth, (req, res) => {
+  const { email } = req.session.user;
+  if (!userPreferences[email]) userPreferences[email] = { favorites: [], highlights: {} };
+  const noteId = parseInt(req.params.id);
+  if (!userPreferences[email].favorites.includes(noteId)) {
+    userPreferences[email].favorites.push(noteId);
+  }
+  res.json({ success: true, favorites: userPreferences[email].favorites });
+});
+
+app.delete('/api/favorites/:id', auth, (req, res) => {
+  const { email } = req.session.user;
+  if (!userPreferences[email]) userPreferences[email] = { favorites: [], highlights: {} };
+  const noteId = parseInt(req.params.id);
+  userPreferences[email].favorites = userPreferences[email].favorites.filter(id => id !== noteId);
+  res.json({ success: true, favorites: userPreferences[email].favorites });
+});
+
+app.get('/api/favorites', auth, (req, res) => {
+  const { email } = req.session.user;
+  if (!userPreferences[email]) userPreferences[email] = { favorites: [], highlights: {} };
+  res.json(userPreferences[email].favorites);
+});
+
+// Highlights
+app.post('/api/highlights/:id', auth, (req, res) => {
+  const { email } = req.session.user;
+  const noteId = req.params.id;
+  const { highlights } = req.body;
+  if (!userPreferences[email]) userPreferences[email] = { favorites: [], highlights: {} };
+  userPreferences[email].highlights[noteId] = highlights;
+  res.json({ success: true });
+});
+
+app.get('/api/highlights/:id', auth, (req, res) => {
+  const { email } = req.session.user;
+  const noteId = req.params.id;
+  if (!userPreferences[email]) userPreferences[email] = { favorites: [], highlights: {} };
+  res.json(userPreferences[email].highlights[noteId] || []);
 });
 
 app.get('*', (req, res) => res.sendFile(join(__dirname, 'index.html')));
