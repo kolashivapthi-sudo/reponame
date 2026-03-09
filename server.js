@@ -34,7 +34,6 @@ const upload = multer({ dest: uploadDir });
 
 // Data store
 const users = {
-  'kolashivapthi@gmail.com': { role: 'admin', password: 'admin123' },
   uploaders: []
 };
 const notes = [];
@@ -85,14 +84,9 @@ app.get('/auth/google/callback',
 );
 
 app.post('/api/login', (req, res) => {
-  const { email, password } = req.body;
+  const { email } = req.body;
   const userInfo = parseEmail(email);
   if (!userInfo) return res.status(400).json({ error: 'Invalid email' });
-  
-  if (userInfo.role === 'admin' && password === users[email]?.password) {
-    req.session.user = { email, ...userInfo };
-    return res.json({ success: true, user: req.session.user });
-  }
   
   req.session.user = { email, ...userInfo };
   res.json({ success: true, user: req.session.user });

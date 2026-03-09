@@ -43,19 +43,12 @@ npm start
 
 6. Access at: http://localhost:3000
 
-## Login Methods
+## Login
 
-**Google OAuth (Recommended):**
+**Google OAuth:**
 - Click "Sign in with Google"
 - Use institutional email (@bvrithyderabad.edu.in) for students
 - Use admin email (kolashivapthi@gmail.com) for admin access
-
-**Test Mode (Development):**
-- Email: kolashivapthi@gmail.com
-- Password: admin123
-
-**Student Example:**
-- Email: 25wh1a0501@bvrithyderabad.edu.in (CSE student)
 
 **Branch Codes:**
 - 05 → CSE
